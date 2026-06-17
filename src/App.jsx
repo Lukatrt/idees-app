@@ -713,6 +713,9 @@ Note à structurer : "${idea.text}"`;
   const doneItems = ideas.filter((i) => i.status === "done");
   const catCount = (id) => ideas.filter((i) => i.status === "classed" && i.category === id).length;
   const catOf = (id) => categories.find((c) => c.id === id);
+  const existingAuthors = Array.from(new Set(ideas.map((i) => i.author).filter(Boolean)))
+    .map(name => name.trim())
+    .filter(name => name && name.toLowerCase() !== "anonyme");
 
   const visibleRanged = (() => {
     const f = filter.trim().toLowerCase();
@@ -1159,20 +1162,39 @@ Note à structurer : "${idea.text}"`;
             {/* Username Config */}
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8, color: "var(--muted-color)" }}>
-                Votre pseudonyme (pour identifier vos ajouts)
+                Profil actuellement connecté
               </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Ex: Luka, Marie..."
-                className="fx w-full"
-                style={{
-                  minHeight: 44, padding: "8px 12px", fontSize: 14.5, 
-                  borderRadius: 8, border: "1px solid var(--line-color)", 
-                  background: "var(--surface-color)", color: "var(--ink-color)"
-                }}
-              />
+              <div className="flex items-center justify-between" style={{
+                background: "var(--surface-alt-color)",
+                border: "1px solid var(--line-color)",
+                borderRadius: 12,
+                padding: "8px 14px",
+                minHeight: 54
+              }}>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "var(--ink-color)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  👤 {username || "Anonyme"}
+                </span>
+                <button
+                  onClick={() => {
+                    setUsername("");
+                    setShowSettings(false);
+                  }}
+                  className="fx"
+                  style={{
+                    background: "rgba(143, 36, 24, 0.1)",
+                    border: "1.5px solid rgba(143, 36, 24, 0.25)",
+                    color: "var(--danger-color)",
+                    borderRadius: 8,
+                    padding: "0 12px",
+                    minHeight: 36,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  Déconnexion
+                </button>
+              </div>
             </div>
 
             {/* Position Select */}
@@ -1695,10 +1717,50 @@ Note à structurer : "${idea.text}"`;
                 setUsername(val);
               }
             }}>
+              {existingAuthors.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--muted-color)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Se connecter en tant que :
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                    {existingAuthors.map((author) => (
+                      <button
+                        key={author}
+                        type="button"
+                        onClick={() => setUsername(author)}
+                        className="fx"
+                        style={{
+                          background: "var(--surface-color)",
+                          border: "1.5px solid var(--line-color)",
+                          borderRadius: 20,
+                          padding: "0 18px",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "var(--ink-color)",
+                          cursor: "pointer",
+                          minHeight: 44,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6,
+                          boxShadow: "0 2px 6px rgba(30, 34, 25, 0.03)"
+                        }}
+                      >
+                        👤 {author}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", margin: "20px 0", color: "var(--line-color)" }}>
+                    <div style={{ flex: 1, height: 1, background: "currentColor", opacity: 0.5 }} />
+                    <span style={{ padding: "0 12px", fontSize: 12, color: "var(--muted-color)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em" }}>Ou nouveau profil</span>
+                    <div style={{ flex: 1, height: 1, background: "currentColor", opacity: 0.5 }} />
+                  </div>
+                </div>
+              )}
+
               <input
                 name="pseudoInput"
                 type="text"
-                autoFocus
                 placeholder="Ex: Luka, Marie, Papa..."
                 className="fx w-full"
                 style={{

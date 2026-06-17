@@ -23,7 +23,7 @@
   --shadow-hover-color: rgba(30, 34, 25, 0.08);
   --glass-bg: rgba(252, 253, 251, 0.88);
   --glass-border: rgba(255, 255, 255, 0.45); /* White reflection glow */
-  --blob-opacity: 0.15;
+  --blob-opacity: 0.22; /* High saturation for liquid glass POP */
 }
 /* Style reset and defaults */
 * {
@@ -38,9 +38,8 @@ html, body, #root {
 
 body {
   font-family: var(--font-ui);
-  background-color: var(--bg-color);
+  background: linear-gradient(150deg, #E3E7DC 0%, #CCD1C0 100%) fixed;
   color: var(--ink-color);
-  transition: background-color 0.3s ease, color 0.3s ease;
   -webkit-tap-highlight-color: transparent;
   overflow: hidden;
   position: fixed;
@@ -80,19 +79,19 @@ h1, h2, h3, h4, h5, h6 {
   transition: opacity 0.5s ease, background-color 0.5s ease;
 }
 @keyframes float-1 {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(5%, 7%) scale(1.08); }
-  100% { transform: translate(0, 0) scale(1); }
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate(5%, 7%) scale(1.08) rotate(180deg); }
+  100% { transform: translate(0, 0) scale(1) rotate(360deg); }
 }
 @keyframes float-2 {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-6%, -5%) scale(0.96); }
-  100% { transform: translate(0, 0) scale(1); }
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate(-6%, -5%) scale(0.96) rotate(-180deg); }
+  100% { transform: translate(0, 0) scale(1) rotate(-360deg); }
 }
 @keyframes float-3 {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(7%, -6%) scale(1.12); }
-  100% { transform: translate(0, 0) scale(1); }
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate(7%, -6%) scale(1.12) rotate(180deg); }
+  100% { transform: translate(0, 0) scale(1) rotate(360deg); }
 }
 
 .blob-1 {
