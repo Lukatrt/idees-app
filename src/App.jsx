@@ -747,9 +747,9 @@ Note à structurer : "${idea.text}"`;
 
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-      {/* Decorative blobs for iOS Glassmorphism effect */}
       <div className="blob blob-1"></div>
       <div className="blob blob-2"></div>
+      <div className="blob blob-3"></div>
 
       <div role="status" aria-live="polite" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{live}</div>
 
@@ -1318,14 +1318,14 @@ Note à structurer : "${idea.text}"`;
             style={{
               width: "100%", maxWidth: 680, alignSelf: "center",
               borderTopLeftRadius: 24, borderTopRightRadius: 24,
-              border: "1px solid rgba(255, 255, 255, 0.45)", 
+              border: "1px solid rgba(255, 255, 255, 0.55)", 
               borderBottom: "none",
-              background: "rgba(252, 253, 251, 0.85)",
-              backdropFilter: "blur(35px)",
-              WebkitBackdropFilter: "blur(35px)",
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.65) 100%)",
+              backdropFilter: "blur(40px) saturate(210%)",
+              WebkitBackdropFilter: "blur(40px) saturate(210%)",
               padding: "24px 20px calc(24px + env(safe-area-inset-bottom))",
               maxHeight: "90vh", overflowY: "auto",
-              boxShadow: "0 -10px 40px rgba(30, 34, 25, 0.12)"
+              boxShadow: "inset 0 1.5px 0 0 rgba(255, 255, 255, 0.75), 0 -15px 45px rgba(30, 34, 25, 0.15)"
             }}
             onClick={(e) => e.stopPropagation()}
           >
