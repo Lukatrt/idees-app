@@ -1657,6 +1657,72 @@ Note à structurer : "${idea.text}"`;
           </div>
         </div>
       )}
+
+      {/* ── Username Force Modal Overlay ── */}
+      {!username.trim() && (
+        <div 
+          className="fade-in" 
+          style={{
+            position: "fixed", top: 0, bottom: 0, left: 0, right: 0, zIndex: 60,
+            background: "rgba(30, 34, 25, 0.4)", 
+            backdropFilter: "blur(15px)",
+            WebkitBackdropFilter: "blur(15px)",
+            display: "flex", justifyContent: "center", alignItems: "center"
+          }}
+        >
+          <div 
+            className="slide-up" 
+            style={{
+              width: "100%", maxWidth: 400, padding: 28, margin: "16px", 
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.7) 100%)",
+              border: "1px solid rgba(255, 255, 255, 0.55)",
+              borderRadius: 24,
+              boxShadow: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6), 0 20px 50px rgba(30, 34, 25, 0.15)",
+              textAlign: "center"
+            }}
+          >
+            <h2 style={{ fontFamily: FONT_DISP, fontWeight: 700, fontSize: 22, margin: "0 0 12px 0", color: "var(--ink-color)" }}>
+              [ Choisir un pseudonyme ]
+            </h2>
+            <p style={{ fontSize: 14.5, color: "var(--muted-color)", lineHeight: 1.5, margin: "0 0 20px 0" }}>
+              Pour utiliser l'application de synchronisation en temps réel, veuillez renseigner un pseudonyme. Vos ajouts et modifications y seront associés.
+            </p>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const val = e.target.elements.pseudoInput.value.trim();
+              if (val) {
+                setUsername(val);
+              }
+            }}>
+              <input
+                name="pseudoInput"
+                type="text"
+                autoFocus
+                placeholder="Ex: Luka, Marie, Papa..."
+                className="fx w-full"
+                style={{
+                  minHeight: 44, padding: "8px 14px", fontSize: 16, 
+                  borderRadius: 12, border: "1px solid var(--line-color)", 
+                  background: "var(--surface-color)", color: "var(--ink-color)",
+                  marginBottom: 16, textAlign: "center", outline: "none"
+                }}
+              />
+              <button
+                type="submit"
+                className="fx w-full"
+                style={{
+                  background: "var(--accent-color)", color: "#fff", border: "none",
+                  borderRadius: 12, minHeight: 44, fontWeight: 700, fontSize: 15, cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(47, 107, 67, 0.2)"
+                }}
+              >
+                Commencer à utiliser l'application
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
