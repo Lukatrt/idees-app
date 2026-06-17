@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import QRCode from "qrcode";
 
+const CAT_COLORS = ["#3F7150", "#B5673F", "#4E6E8E", "#B98A2E", "#8F2418", "#704E8E"];
+
 // ── Default Categories
 const DEFAULT_CATEGORIES = [
   { id: "maison", label: "Maison", color: "#3F7150", removable: false },
@@ -245,23 +247,17 @@ export default function App() {
     }
   }, [pushToServer]);
 
-  // Auto-save data & trigger server push
+  // Auto-save data to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ideas, categories }));
-    
-    if (isIncomingSyncRef.current) {
-      isIncomingSyncRef.current = false;
-      return;
+  }, [ideas, categories]);
+
+  // Trigger push when needsPush becomes true
+  useEffect(() => {
+    if (needsPush) {
+      pushToServer();
     }
-    
-    if (isInitialLoadRef.current) {
-      return;
-    }
-    
-    setNeedsPush(true);
-    needsPushRef.current = true;
-    pushToServer();
-  }, [ideas, categories, pushToServer]);
+  }, [needsPush, pushToServer]);
 
   // ── Sync engine timer & event listeners
   useEffect(() => {
@@ -396,6 +392,7 @@ Idée à classer : "${ideaText}"`;
     };
 
     setIdeas((p) => [newIdeaObj, ...p]);
+    setNeedsPush(true);
     setText("");
     announce("Idée ajoutée dans la boîte à trier");
     if (inputRef.current) inputRef.current.focus();
@@ -409,6 +406,7 @@ Idée à classer : "${ideaText}"`;
   function fileIdea(id, catId) {
     const cat = categories.find((c) => c.id === catId);
     setIdeas((p) => p.map((i) => (i.id === id ? { ...i, status: "classed", category: catId, aiSuggestion: null } : i)));
+    setNeedsPush(true);
     announce(cat ? `Rangé dans ${cat.label}` : "Rangé");
     if (activeIdea && activeIdea.id === id) {
       setActiveIdea(prev => ({ ...prev, status: "classed", category: catId, aiSuggestion: null }));
@@ -418,6 +416,7 @@ Idée à classer : "${ideaText}"`;
   function moveIdea(id, target) {
     if (target === "__inbox") {
       setIdeas((p) => p.map((i) => (i.id === id ? { ...i, status: "inbox", category: null } : i)));
+      setNeedsPush(true);
       announce("Renvoyé dans À trier");
       if (activeIdea && activeIdea.id === id) {
         setActiveIdea(prev => ({ ...prev, status: "inbox", category: null }));
@@ -425,6 +424,7 @@ Idée à classer : "${ideaText}"`;
     } else {
       const cat = categories.find((c) => c.id === target);
       setIdeas((p) => p.map((i) => (i.id === id ? { ...i, status: "classed", category: target } : i)));
+      setNeedsPush(true);
       announce(cat ? `Déplacé dans ${cat.label}` : "Déplacé");
       if (activeIdea && activeIdea.id === id) {
         setActiveIdea(prev => ({ ...prev, status: "classed", category: target }));
@@ -445,6 +445,7 @@ Idée à classer : "${ideaText}"`;
       }
       return updated;
     }));
+    setNeedsPush(true);
   }
 
   function removeIdea(id) {
@@ -452,6 +453,7 @@ Idée à classer : "${ideaText}"`;
     const removed = ideas[idx];
     if (!removed) return;
     setIdeas((p) => p.filter((i) => i.id !== id));
+    setNeedsPush(true);
     setActiveIdea(null);
     announce("Idée supprimée");
     showToast("Idée supprimée", () => {
@@ -460,6 +462,7 @@ Idée à classer : "${ideaText}"`;
         copy.splice(Math.min(idx, copy.length), 0, removed);
         return copy;
       });
+      setNeedsPush(true);
       setToast(null);
       announce("Suppression annulée");
     });
@@ -469,6 +472,7 @@ Idée à classer : "${ideaText}"`;
     const v = newText.trim();
     if (!v) return;
     setIdeas((p) => p.map((i) => (i.id === id ? { ...i, text: v } : i)));
+    setNeedsPush(true);
     announce("Texte de l'idée enregistré");
   }
 
@@ -483,6 +487,7 @@ Idée à classer : "${ideaText}"`;
       }
       return updated;
     }));
+    setNeedsPush(true);
     announce("Sous-tâche modifiée");
   }
 
@@ -498,6 +503,7 @@ Idée à classer : "${ideaText}"`;
       }
       return updated;
     }));
+    setNeedsPush(true);
     announce("Sous-tâche ajoutée");
   }
 
@@ -511,6 +517,7 @@ Idée à classer : "${ideaText}"`;
       }
       return updated;
     }));
+    setNeedsPush(true);
     announce("Sous-tâche supprimée");
   }
 
@@ -545,6 +552,7 @@ Note à structurer : "${idea.text}"`;
           }
           return i;
         }));
+        setNeedsPush(true);
         announce("Note structurée par l'IA avec succès !");
       }
     } catch (err) {
@@ -585,6 +593,7 @@ Note à structurer : "${idea.text}"`;
         if (Array.isArray(parsed.ideas) && Array.isArray(parsed.categories)) {
           setIdeas(parsed.ideas);
           setCategories(parsed.categories);
+          setNeedsPush(true);
           announce("Sauvegarde importée avec succès !");
           showToast("Données importées avec succès !");
         } else {
@@ -603,12 +612,14 @@ Note à structurer : "${idea.text}"`;
     const color = CAT_COLORS[categories.length % CAT_COLORS.length];
     const cat = { id: uid(), label, color, removable: true };
     setCategories((p) => [...p, cat]);
+    setNeedsPush(true);
     setNewCat(""); setAddingCat(false); setTab(cat.id); announce(`Catégorie ${label} créée`);
   }
 
   function removeCategory(catId) {
     setIdeas((p) => p.map((i) => (i.category === catId && i.status !== "done" ? { ...i, category: null, status: "inbox" } : i)));
     setCategories((p) => p.filter((c) => c.id !== catId));
+    setNeedsPush(true);
     setTab((cur) => (cur === catId ? (categories.find((c) => c.id !== catId)?.id || "done") : cur));
     announce("Catégorie supprimée. Idées non terminées renvoyées dans À trier.");
   }
