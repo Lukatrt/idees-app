@@ -55,7 +55,7 @@ app.post('/api/data', (req, res) => {
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Fallback all other GET requests to index.html for React Router / SPA support
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
