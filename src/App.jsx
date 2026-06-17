@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import QRCode from "qrcode";
 
 // ── Default Categories
 const DEFAULT_CATEGORIES = [
@@ -127,6 +128,7 @@ export default function App() {
   const [aiError, setAiError] = useState("");
 
   const inputRef = useRef(null);
+  const qrCanvasRef = useRef(null);
   const toastTimer = useRef(null);
 
   // Sync theme class
@@ -157,6 +159,45 @@ export default function App() {
     setToast({ message, undo });
     toastTimer.current = setTimeout(() => setToast(null), 5000);
   }
+
+  // ── Import API Key from URL (QR Code sync)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const importKey = params.get("importKey");
+      if (importKey) {
+        setGeminiKey(importKey);
+        localStorage.setItem("idees-gemini-key", importKey);
+        
+        // Remove query parameter from address bar
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+        
+        announce("Clé API Gemini importée avec succès !");
+        showToast("Clé API Gemini importée avec succès !");
+      }
+    } catch (e) {
+      console.error("Failed to parse URL query parameters", e);
+    }
+  }, []);
+
+  // ── Generate QR Code for sharing Gemini API Key
+  useEffect(() => {
+    if (showSettings && qrCanvasRef.current && geminiKey.trim()) {
+      // Import URL linking back to the current application address
+      const importUrl = `${window.location.origin}/?importKey=${encodeURIComponent(geminiKey.trim())}`;
+      QRCode.toCanvas(qrCanvasRef.current, importUrl, {
+        width: 180,
+        margin: 1,
+        color: {
+          dark: "#1E2219", // Dark color (high contrast black/dark green)
+          light: "#FFFFFF" // White background (optimal scanning reliability)
+        }
+      }, (error) => {
+        if (error) console.error("Failed to generate QR Code", error);
+      });
+    }
+  }, [geminiKey, showSettings]);
 
   // Helper to suggest category using Gemini
   async function runAiCategorization(ideaId, ideaText) {
@@ -353,6 +394,47 @@ Note à structurer : "${idea.text}"`;
     } finally {
       setAiLoading(false);
     }
+  }
+
+  // ── Backup Export / Import (Serverless sync)
+  function exportData() {
+    try {
+      const dataStr = JSON.stringify({ ideas, categories });
+      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+      const exportFileDefaultName = `idees-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+      announce("Données exportées sous forme de fichier JSON");
+      showToast("Sauvegarde exportée avec succès !");
+    } catch (e) {
+      showToast("Erreur lors de l'exportation");
+    }
+  }
+
+  function handleImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const fileReader = new FileReader();
+    fileReader.readAsText(file, "UTF-8");
+    fileReader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        if (Array.isArray(parsed.ideas) && Array.isArray(parsed.categories)) {
+          setIdeas(parsed.ideas);
+          setCategories(parsed.categories);
+          announce("Sauvegarde importée avec succès !");
+          showToast("Données importées avec succès !");
+        } else {
+          showToast("Format de fichier invalide");
+        }
+      } catch (err) {
+        showToast("Erreur de lecture : fichier corrompu");
+      }
+    };
   }
 
   // ── Categories Management
@@ -618,8 +700,9 @@ Note à structurer : "${idea.text}"`;
           <div 
             className="premium-card" 
             style={{
-              width: "100%", maxWidth: 500, padding: 24, margin: 16, 
-              background: "var(--surface-color)", border: "1px solid var(--line-color)"
+              width: "100%", maxWidth: 500, padding: 24, margin: "16px", 
+              background: "var(--surface-color)", border: "1px solid var(--line-color)",
+              maxHeight: "90vh", overflowY: "auto"
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -682,6 +765,61 @@ Note à structurer : "${idea.text}"`;
                 Active la suggestion de catégories et le nettoyage des notes. Obtenez une clé gratuite sur <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: "var(--accent-color)", textDecoration: "underline" }}>Google AI Studio</a>.
               </span>
             </div>
+
+            {/* Backup & Sync section */}
+            <div style={{ marginBottom: 20, borderTop: "1px solid var(--line-color)", paddingTop: 16 }}>
+              <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8, color: "var(--muted-color)" }}>
+                Sauvegarder & Synchroniser les idées
+              </label>
+              <div className="flex" style={{ gap: 8, marginBottom: 12 }}>
+                <button
+                  onClick={exportData}
+                  className="fx"
+                  style={{
+                    flex: 1, minHeight: 44, borderRadius: 8, border: "1px solid var(--line-color)",
+                    background: "var(--surface-alt-color)", color: "var(--ink-color)",
+                    fontWeight: 600, fontSize: 13.5, display: "inline-flex", alignItems: "center", justifyContent: "center"
+                  }}
+                >
+                  Exporter (JSON)
+                </button>
+                <label
+                  className="fx"
+                  style={{
+                    flex: 1, minHeight: 44, borderRadius: 8, border: "1px solid var(--line-color)",
+                    background: "var(--surface-alt-color)", color: "var(--ink-color)",
+                    fontWeight: 600, fontSize: 13.5, display: "inline-flex", alignItems: "center",
+                    justifyContent: "center", cursor: "pointer"
+                  }}
+                >
+                  Importer (JSON)
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImport}
+                    style={{ display: "none" }}
+                  />
+                </label>
+              </div>
+              <span style={{ fontSize: 12, color: "var(--faint-color)" }}>
+                Permet de transférer manuellement vos idées d'un appareil à un autre sous forme de fichier de sauvegarde.
+              </span>
+            </div>
+
+            {/* QR Code sharing section */}
+            {geminiKey.trim() && (
+              <div style={{ marginBottom: 20, textAlign: "center", borderTop: "1px solid var(--line-color)", paddingTop: 16 }}>
+                <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: "var(--muted-color)", marginBottom: 8 }}>
+                  Partager ma clé API vers l'iPhone (QR Code)
+                </span>
+                <div style={{ background: "#fff", padding: 12, borderRadius: 12, display: "inline-block", border: "1px solid var(--line-color)" }}>
+                  <canvas ref={qrCanvasRef} style={{ display: "block", width: 180, height: 180 }} />
+                </div>
+                <span style={{ display: "block", fontSize: 12, color: "var(--faint-color)", marginTop: 6 }}>
+                  Scannez ce code avec l'appareil photo de votre iPhone. Safari l'ouvrira et configurera la clé automatiquement !
+                </span>
+              </div>
+            )}
 
             <hr style={{ border: "none", borderTop: "1px solid var(--line-color)", margin: "24px 0" }} />
 
