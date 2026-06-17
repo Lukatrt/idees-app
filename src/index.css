@@ -1,5 +1,50 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap');
 
+/* Variable Definitions for Theme system */
+:root {
+  /* Common variables */
+  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-disp: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  
+  /* Light theme colors (Papier chaulé, vert pin, encre vert-charbon) */
+  --bg-color: #F5F6F2;
+  --surface-color: #FCFDFB;
+  --surface-alt-color: #EAECE4;
+  --ink-color: #1E2219;
+  --muted-color: #4C5245; /* WCAG AA compliant on light background */
+  --faint-color: #6C7364; /* WCAG AA compliant on white */
+  --line-color: #D2D6C8;
+  --accent-color: #2F6B43;
+  --accent-dark-color: #23512F;
+  --accent-soft-color: #E4EBDF;
+  --accent-ink-color: #1F4A2C;
+  --danger-color: #8F2418;
+  --shadow-color: rgba(30, 34, 25, 0.04);
+  --shadow-hover-color: rgba(30, 34, 25, 0.08);
+  --glass-bg: rgba(252, 253, 251, 0.85);
+  --glass-border: rgba(210, 214, 200, 0.6);
+}
+
+:root.dark {
+  /* Dark theme colors (Ardoise profonde, mousse sombre, texte crème) */
+  --bg-color: #131711;
+  --surface-color: #1E231B;
+  --surface-alt-color: #272E24;
+  --ink-color: #ECEDE9;
+  --muted-color: #A2A99B; /* WCAG AA compliant on dark background */
+  --faint-color: #828B7A;
+  --line-color: #333C2F;
+  --accent-color: #3D8856;
+  --accent-dark-color: #2E6641;
+  --accent-soft-color: #243528;
+  --accent-ink-color: #A3D2B3;
+  --danger-color: #C34B3C;
+  --shadow-color: rgba(0, 0, 0, 0.2);
+  --shadow-hover-color: rgba(0, 0, 0, 0.35);
+  --glass-bg: rgba(30, 35, 27, 0.85);
+  --glass-border: rgba(51, 60, 47, 0.6);
+}
+
 /* Style reset and defaults */
 * {
   box-sizing: border-box;
@@ -8,14 +53,39 @@
 html, body, #root {
   margin: 0;
   height: 100%;
-  -webkit-text-size-adjust: 100%; /* Prevent font scaling on orientation change on iOS */
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent; /* Remove gray overlay on iOS tap */
+  font-family: var(--font-ui);
+  background-color: var(--bg-color);
+  color: var(--ink-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Premium card styles */
+.premium-card {
+  background: var(--surface-color);
+  border: 1px solid var(--line-color);
+  box-shadow: 0 4px 16px var(--shadow-color);
+  border-radius: 16px;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+              background-color 0.3s ease, 
+              border-color 0.3s ease;
+}
+
+.premium-card:hover {
+  box-shadow: 0 6px 20px var(--shadow-hover-color);
+}
+
+/* Frosted glass panel style */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
 }
 
 /* Tailwind-like structural utility classes */
@@ -46,11 +116,54 @@ body {
 
 /* Custom interactive element styles */
 .fx {
-  transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
 
-/* Smooth active states for touch targets (excluding input and select fields) */
+/* Smooth active states for touch targets */
 .fx:active:not(:disabled):not(input):not(select) {
   transform: scale(0.97);
-  opacity: 0.95;
+  opacity: 0.92;
+}
+
+/* Accessible focus visible outlines */
+.fx:focus-visible, input.fx:focus-visible, select.fx:focus-visible {
+  outline: 3px solid var(--accent-color);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Smooth slide up animation for bottom sheets */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.slide-up {
+  animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Fade in background overlays */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+@keyframes idea-in { 
+  from { opacity: 0; transform: translateY(6px); } 
+  to { opacity: 1; transform: none; } 
+}
+
+.idea-in { 
+  animation: idea-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
