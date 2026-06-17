@@ -149,9 +149,16 @@ export default function App() {
   // ── Sync Engine States & Refs
   const isInitialLoadRef = useRef(true);
   const isIncomingSyncRef = useRef(false);
-  const isSyncingRef = useRef(false);
+  const isFetchingRef = useRef(false);
+  const isPushingRef = useRef(false);
   const [needsPush, setNeedsPush] = useState(false);
+  const needsPushRef = useRef(false);
   const [syncStatus, setSyncStatus] = useState("synchronisé"); // "synchronisé" | "hors-ligne" | "synchronisation..."
+
+  // Sync needsPushRef with state
+  useEffect(() => {
+    needsPushRef.current = needsPush;
+  }, [needsPush]);
 
   const latestDataRef = useRef({ ideas, categories });
   useEffect(() => {
@@ -159,8 +166,8 @@ export default function App() {
   }, [ideas, categories]);
 
   const pushToServer = useCallback(async () => {
-    if (isSyncingRef.current) return;
-    isSyncingRef.current = true;
+    if (isPushingRef.current) return;
+    isPushingRef.current = true;
     setSyncStatus("synchronisation...");
     const { ideas: ideasToPush, categories: categoriesToPush } = latestDataRef.current;
     try {
@@ -170,30 +177,40 @@ export default function App() {
         body: JSON.stringify({ ideas: ideasToPush, categories: categoriesToPush }),
       });
       if (!res.ok) throw new Error("HTTP error " + res.status);
-      setNeedsPush(false);
+      
+      const currentData = latestDataRef.current;
+      if (JSON.stringify(currentData.ideas) === JSON.stringify(ideasToPush) && 
+          JSON.stringify(currentData.categories) === JSON.stringify(categoriesToPush)) {
+        setNeedsPush(false);
+      }
       setSyncStatus("synchronisé");
     } catch (err) {
       console.error("Push to server failed:", err);
       setSyncStatus("hors-ligne");
     } finally {
-      isSyncingRef.current = false;
+      isPushingRef.current = false;
     }
   }, []);
 
   const fetchFromServer = useCallback(async () => {
-    if (isSyncingRef.current) return;
-    isSyncingRef.current = true;
+    if (isFetchingRef.current || isPushingRef.current || needsPushRef.current) return;
+    isFetchingRef.current = true;
     setSyncStatus("synchronisation...");
     try {
       const res = await fetch("/api/data");
       if (!res.ok) throw new Error("HTTP error " + res.status);
       const data = await res.json();
       
+      if (needsPushRef.current || isPushingRef.current) {
+        console.log("Skipping server update because local changes are pending");
+        return;
+      }
+      
       let dataChanged = false;
       if (data && Array.isArray(data.ideas) && Array.isArray(data.categories)) {
         const { ideas: currentIdeas, categories: currentCategories } = latestDataRef.current;
         if (data.pristine && (currentIdeas.length > 0 || currentCategories.length !== DEFAULT_CATEGORIES.length)) {
-          isSyncingRef.current = false;
+          isFetchingRef.current = false;
           await pushToServer();
           return;
         }
@@ -223,7 +240,7 @@ export default function App() {
       console.error("Fetch from server failed:", err);
       setSyncStatus("hors-ligne");
     } finally {
-      isSyncingRef.current = false;
+      isFetchingRef.current = false;
       isInitialLoadRef.current = false;
     }
   }, [pushToServer]);
@@ -242,11 +259,15 @@ export default function App() {
     }
     
     setNeedsPush(true);
+    needsPushRef.current = true;
     pushToServer();
   }, [ideas, categories, pushToServer]);
 
   // ── Sync engine timer & event listeners
   useEffect(() => {
+    // Initial fetch on mount
+    fetchFromServer();
+
     // Polling interval
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
@@ -643,20 +664,47 @@ Note à structurer : "${idea.text}"`;
         {/* Header */}
         <header className="flex items-center justify-between" style={{ paddingTop: 20, paddingBottom: 12 }}>
           <div className="flex items-center" style={{ gap: 10 }}>
-            <h1 style={{ fontFamily: FONT_DISP, fontWeight: 700, fontSize: 28, letterSpacing: "-0.02em", margin: 0 }}>idées</h1>
-            <span style={{ 
-              fontSize: 10, 
-              fontWeight: 700, 
-              letterSpacing: "0.05em", 
-              textTransform: "uppercase",
-              color: syncStatus === "synchronisé" ? "var(--accent-ink-color)" : syncStatus === "hors-ligne" ? "var(--danger-color)" : "var(--muted-color)",
-              background: syncStatus === "synchronisé" ? "var(--accent-soft-color)" : "var(--surface-alt-color)",
-              padding: "4px 8px",
-              borderRadius: 6,
-              transition: "color 0.3s ease, background 0.3s ease"
-            }}>
-              {syncStatus === "synchronisé" ? "[ Synchronisé ]" : syncStatus === "hors-ligne" ? "[ Hors-ligne ]" : "[ Sync... ]"}
-            </span>
+            <h1 style={{ fontFamily: FONT_DISP, fontWeight: 700, fontSize: 28, letterSpacing: "-0.02em", margin: 0, color: "var(--ink-color)" }}>idées</h1>
+            <button 
+              onClick={() => {
+                if (needsPush) {
+                  pushToServer();
+                } else {
+                  fetchFromServer();
+                }
+              }}
+              className="fx" 
+              style={{
+                background: syncStatus === "synchronisé" ? "var(--accent-soft-color)" : syncStatus === "hors-ligne" ? "rgba(195, 75, 60, 0.12)" : "var(--surface-alt-color)",
+                border: `1px solid ${syncStatus === "synchronisé" ? "var(--accent-color)" : syncStatus === "hors-ligne" ? "var(--danger-color)" : "var(--line-color)"}`,
+                borderRadius: 999, 
+                height: 40, 
+                padding: "0 14px", 
+                fontSize: 12.5, 
+                fontWeight: 700, 
+                color: syncStatus === "synchronisé" ? "var(--accent-ink-color)" : syncStatus === "hors-ligne" ? "var(--danger-color)" : "var(--ink-color)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                cursor: "pointer",
+                boxShadow: "0 2px 8px var(--shadow-color)"
+              }}
+              aria-label={`Statut de synchronisation: ${syncStatus}. Cliquer pour rafraîchir.`}
+            >
+              <span 
+                className={syncStatus === "synchronisation..." ? "pulse-animation" : ""}
+                style={{ 
+                  width: 8, 
+                  height: 8, 
+                  borderRadius: 999, 
+                  background: syncStatus === "synchronisé" ? "var(--accent-color)" : syncStatus === "hors-ligne" ? "var(--danger-color)" : "var(--muted-color)",
+                  display: "inline-block"
+                }} 
+              />
+              <span>
+                {syncStatus === "synchronisé" ? "Synchronisé" : syncStatus === "hors-ligne" ? "Hors-ligne" : "Sync..."}
+              </span>
+            </button>
           </div>
           <div className="flex" style={{ gap: 8 }}>
             <button 
@@ -719,7 +767,17 @@ Note à structurer : "${idea.text}"`;
         {/* ── Instanteous Capture Field (TOP POSITION) ── */}
         {inputPosition === "top" && (
           <div style={{ paddingTop: 4, paddingBottom: 16 }}>
-            <div className="flex" style={{ gap: 8 }}>
+            <div 
+              className="premium-card" 
+              style={{
+                padding: "6px", 
+                borderRadius: 24, 
+                border: "1px solid var(--line-color)",
+                display: "flex", 
+                gap: 8,
+                alignItems: "center"
+              }}
+            >
               <input
                 ref={inputRef}
                 className="fx w-full"
@@ -729,8 +787,16 @@ Note à structurer : "${idea.text}"`;
                 placeholder="Noter une idée sans réfléchir..."
                 aria-label="Saisir une nouvelle idée"
                 style={{
-                  flex: 1, background: "var(--surface-color)", border: "1px solid var(--line-color)", borderRadius: 12,
-                  padding: "13px 14px", fontSize: 16, color: "var(--ink-color)", fontFamily: FONT_UI, minHeight: 48,
+                  flex: 1, 
+                  background: "transparent", 
+                  border: "none", 
+                  borderRadius: 16,
+                  padding: "12px 16px", 
+                  fontSize: 16, 
+                  color: "var(--ink-color)", 
+                  fontFamily: FONT_UI, 
+                  minHeight: 44,
+                  outline: "none"
                 }}
               />
               <button
@@ -738,10 +804,15 @@ Note à structurer : "${idea.text}"`;
                 onClick={addIdea}
                 disabled={!text.trim()}
                 style={{
-                  background: text.trim() ? "var(--accent-color)" : "var(--surface-alt-color)",
+                  background: text.trim() ? "var(--accent-color)" : "transparent",
                   color: text.trim() ? "#fff" : "var(--faint-color)",
-                  border: "none", borderRadius: 12, padding: "0 18px", fontSize: 15, fontWeight: 600,
-                  minHeight: 48, fontFamily: FONT_DISP,
+                  border: "none", 
+                  borderRadius: 20, 
+                  padding: "0 18px", 
+                  fontSize: 14, 
+                  fontWeight: 700,
+                  minHeight: 40, 
+                  fontFamily: FONT_DISP,
                 }}
               >
                 Ajouter
@@ -786,14 +857,28 @@ Note à structurer : "${idea.text}"`;
       {/* ── Instanteous Capture Field (BOTTOM FLOATING POSITION - default) ── */}
       {inputPosition === "bottom" && (
         <div 
-          className="glass-panel" 
           style={{
-            position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10,
-            padding: "12px 16px calc(12px + env(safe-area-inset-bottom))",
-            borderTop: "1px solid var(--line-color)"
+            position: "fixed", 
+            bottom: "calc(16px + env(safe-area-inset-bottom))", 
+            left: 16, 
+            right: 16, 
+            zIndex: 10,
+            boxShadow: "0 8px 32px var(--shadow-color)"
           }}
         >
-          <div className="mx-auto flex" style={{ maxWidth: 650, gap: 8 }}>
+          <div 
+            className="glass-panel" 
+            style={{
+              padding: "6px", 
+              borderRadius: 24, 
+              border: "1px solid var(--glass-border)",
+              display: "flex", 
+              gap: 8,
+              alignItems: "center",
+              maxWidth: 650,
+              margin: "0 auto"
+            }}
+          >
             <input
               ref={inputRef}
               className="fx w-full"
@@ -803,8 +888,16 @@ Note à structurer : "${idea.text}"`;
               placeholder="Noter une idée sans réfléchir..."
               aria-label="Saisir une nouvelle idée"
               style={{
-                flex: 1, background: "var(--surface-color)", border: "1px solid var(--line-color)", borderRadius: 12,
-                padding: "12px 14px", fontSize: 16, color: "var(--ink-color)", fontFamily: FONT_UI, minHeight: 48,
+                flex: 1, 
+                background: "transparent", 
+                border: "none", 
+                borderRadius: 16,
+                padding: "12px 16px", 
+                fontSize: 16, 
+                color: "var(--ink-color)", 
+                fontFamily: FONT_UI, 
+                minHeight: 44,
+                outline: "none"
               }}
             />
             <button
@@ -812,10 +905,15 @@ Note à structurer : "${idea.text}"`;
               onClick={addIdea}
               disabled={!text.trim()}
               style={{
-                background: text.trim() ? "var(--accent-color)" : "var(--surface-alt-color)",
+                background: text.trim() ? "var(--accent-color)" : "transparent",
                 color: text.trim() ? "#fff" : "var(--faint-color)",
-                border: "none", borderRadius: 12, padding: "0 18px", fontSize: 15, fontWeight: 600,
-                minHeight: 48, fontFamily: FONT_DISP,
+                border: "none", 
+                borderRadius: 20, 
+                padding: "0 18px", 
+                fontSize: 14, 
+                fontWeight: 700,
+                minHeight: 40, 
+                fontFamily: FONT_DISP,
               }}
             >
               Ajouter
@@ -827,7 +925,7 @@ Note à structurer : "${idea.text}"`;
       {/* ── Undo Toast ── */}
       {toast && (
         <div className="idea-in" style={{
-          position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: inputPosition === "bottom" ? 84 : 22,
+          position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: inputPosition === "bottom" ? 96 : 22,
           background: "var(--ink-color)", color: "var(--bg-color)", borderRadius: 12, padding: "12px 16px",
           display: "flex", alignItems: "center", gap: 16, fontSize: 14.5, boxShadow: "0 6px 24px var(--shadow-hover-color)",
           maxWidth: "calc(100% - 32px)", zIndex: 30
@@ -1020,6 +1118,16 @@ Note à structurer : "${idea.text}"`;
             }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* iOS Drag Handle */}
+            <div style={{
+              width: 36,
+              height: 5,
+              borderRadius: 2.5,
+              background: "var(--line-color)",
+              margin: "0 auto 16px",
+              opacity: 0.8
+            }} />
+
             {/* Bottom Sheet Header */}
             <div className="flex justify-between items-center" style={{ marginBottom: 16 }}>
               <div>
@@ -1487,7 +1595,18 @@ function RangedView(props) {
     <div style={{ marginTop: 8 }}>
       
       {/* Categories Horizontal Tabs */}
-      <div className="flex items-center" style={{ flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+      <div 
+        className="flex items-center no-scrollbar" 
+        style={{ 
+          overflowX: "auto", 
+          flexWrap: "nowrap", 
+          gap: 8, 
+          marginBottom: 16,
+          paddingBottom: 6,
+          width: "100%",
+          WebkitOverflowScrolling: "touch"
+        }}
+      >
         {categories.map((c) => {
           const active = tab === c.id;
           return (
