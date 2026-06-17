@@ -59,6 +59,42 @@ app.post('/api/data', (req, res) => {
   }
 });
 
+app.post('/api/external-add', (req, res) => {
+  try {
+    const { text, author } = req.body;
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: "Missing or invalid 'text' parameter" });
+    }
+
+    let db = { ideas: [], categories: DEFAULT_CATEGORIES };
+    if (fs.existsSync(DATA_FILE)) {
+      const fileContent = fs.readFileSync(DATA_FILE, 'utf8');
+      db = JSON.parse(fileContent);
+    }
+
+    const newId = Math.random().toString(36).substring(2, 10);
+    const newIdea = {
+      id: newId,
+      text: text.trim(),
+      createdAt: Date.now(),
+      status: "inbox",
+      category: null,
+      aiSuggestion: null,
+      subtasks: [],
+      image: null,
+      author: (author || "Raccourci").trim()
+    };
+
+    db.ideas = [newIdea, ...db.ideas];
+    fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf8');
+
+    return res.json({ status: "ok", idea: newIdea });
+  } catch (err) {
+    console.error("Error in external-add endpoint", err);
+    return res.status(500).json({ error: "Failed to save data" });
+  }
+});
+
 // ── Serve React Static Files in Production
 app.use(express.static(path.join(__dirname, 'dist')));
 
