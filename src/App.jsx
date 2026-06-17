@@ -143,6 +143,14 @@ export default function App() {
     return localStorage.getItem("idees-gemini-key") || "";
   });
 
+  const [username, setUsername] = useState(() => {
+    return localStorage.getItem("idees-username") || "";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("idees-username", username);
+  }, [username]);
+
   const [view, setView] = useState("inbox"); // 'inbox' | 'ranged'
   const [tab, setTab] = useState("maison"); // selected category or 'done'
   const [text, setText] = useState("");
@@ -400,8 +408,21 @@ export default function App() {
     if (!geminiKey.trim()) return;
     try {
       const catLabels = categories.map(c => c.label);
-      const prompt = `Vous êtes un classificateur d'idées. Voici la liste des catégories configurées : [${catLabels.join(", ")}].
-Analyse l'idée suivante et suggère la catégorie la plus pertinente. Réponds UNIQUEMENT sous forme d'un objet JSON valide contenant la clé "suggestedCategory" avec pour valeur l'un des labels exacts de la liste, ou null s'il n'y a aucune correspondance claire.
+      const prompt = `Vous êtes un assistant IA spécialisé dans l'organisation d'idées pour une personne aphantasique. Votre rôle est de classer l'idée fournie dans l'une des catégories configurées : [${catLabels.join(", ")}].
+
+Directives strictes :
+1. Choisissez uniquement et exactement l'une des catégories de la liste fournie.
+2. Si l'idée ne correspond à aucune catégorie de façon évidente et directe, renvoyez null. Ne faites pas d'hypothèses farfelues ou indirectes.
+3. Ignorez les mots vides ou expressions d'hésitation. Concentrez-vous sur le sens concret.
+4. Répondez UNIQUEMENT sous forme d'un objet JSON valide contenant la clé "suggestedCategory". Aucun texte explicatif ou salutation autour du JSON.
+
+Exemple d'idées et classifications attendues :
+- Catégories : [Maison, Travaux, À faire]
+- Idée : "repeindre la cuisine et fixer l'étagère" -> {"suggestedCategory": "Travaux"}
+- Idée : "appeler le plombier pour la fuite d'eau" -> {"suggestedCategory": "Maison"}
+- Idée : "penser à acheter du pain" -> {"suggestedCategory": "À faire"}
+- Idée : "idée de startup de vente de chaussures en ligne" -> {"suggestedCategory": null}
+
 Idée à classer : "${ideaText}"`;
       
       const result = await callGemini(prompt, geminiKey);
@@ -430,7 +451,8 @@ Idée à classer : "${ideaText}"`;
       category: null,
       aiSuggestion: null,
       subtasks: [],
-      image: attachedImage || null
+      image: attachedImage || null,
+      author: username.trim() || "Anonyme"
     };
 
     setIdeas((p) => [newIdeaObj, ...p]);
@@ -571,11 +593,30 @@ Idée à classer : "${ideaText}"`;
     setAiError("");
     announce("IA structure la note...");
     try {
-      const prompt = `Nettoyez, structurez et corrigez cette note prise à la volée. Reformulez-la pour la rendre claire et bien écrite en français.
-S'il y a plusieurs étapes, tâches distinctes ou éléments à lister, séparez-les sous forme de liste de tâches. Conservez l'essentiel, ne brodez pas.
-Répondez UNIQUEMENT avec un objet JSON valide contenant deux clés :
-- "text": (String) la note principale nettoyée et propre.
-- "tasks": (Tableau de chaînes) les tâches individuelles à extraire. Si c'est juste une note simple sans liste, renvoyez un tableau vide.
+      const prompt = `Vous êtes un assistant IA qui structure des notes prises à la volée pour une personne ayant des difficultés à visualiser mentalement ses tâches (aphantasie). Votre mission est de clarifier, corriger l'orthographe et structurer la note fournie, sans en modifier le sens.
+
+Règles de mise en forme strictes :
+1. Reformulez la note principale pour la rendre propre, claire et bien écrite en français, sans fioritures.
+2. Identifiez s'il y a des actions, étapes ou sous-tâches concrètes à effectuer. Si oui, extrayez-les sous forme d'une liste de phrases courtes et directes (maximum 5 mots par tâche, commençant par un verbe d'action à l'infinitif).
+3. Si la note ne contient pas d'étapes de travail ou d'actions multiples, la liste de tâches (tasks) doit être vide.
+4. Vous devez répondre UNIQUEMENT sous forme d'un objet JSON valide contenant deux clés :
+   - "text" : (String) La note principale nettoyée et corrigée.
+   - "tasks" : (Tableau de chaînes) Les phrases courtes des sous-tâches identifiées (ou tableau vide si aucune tâche).
+5. Ne mettez aucun commentaire introductif ou explicatif, pas de blocs markdown de code (\`\`\`json ... \`\`\`), uniquement le JSON brut.
+
+Exemple 1 :
+- Entrée : "acheter peinture blanche rouleau pinceaux appeler jean pour devis cuisine"
+- Sortie : {
+    "text": "Acheter le matériel de peinture et appeler Jean pour le devis de la cuisine.",
+    "tasks": ["Acheter de la peinture blanche", "Prendre un rouleau et des pinceaux", "Appeler Jean pour le devis"]
+  }
+
+Exemple 2 :
+- Entrée : "penser à ranger le garage samedi matin s'il fait beau"
+- Sortie : {
+    "text": "Prévoir de ranger le garage ce samedi matin s'il fait beau.",
+    "tasks": ["Ranger le garage"]
+  }
 
 Note à structurer : "${idea.text}"`;
       
@@ -1115,6 +1156,25 @@ Note à structurer : "${idea.text}"`;
               </button>
             </div>
 
+            {/* Username Config */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8, color: "var(--muted-color)" }}>
+                Votre pseudonyme (pour identifier vos ajouts)
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Ex: Luka, Marie..."
+                className="fx w-full"
+                style={{
+                  minHeight: 44, padding: "8px 12px", fontSize: 14.5, 
+                  borderRadius: 8, border: "1px solid var(--line-color)", 
+                  background: "var(--surface-color)", color: "var(--ink-color)"
+                }}
+              />
+            </div>
+
             {/* Position Select */}
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8, color: "var(--muted-color)" }}>
@@ -1246,18 +1306,26 @@ Note à structurer : "${idea.text}"`;
           className="fade-in" 
           style={{
             position: "fixed", top: 0, bottom: 0, left: 0, right: 0, zIndex: 50,
-            background: "rgba(0,0,0,0.5)", display: "flex", flexDirection: "column", justifyContent: "flex-end"
+            background: "rgba(30, 34, 25, 0.3)", 
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            display: "flex", flexDirection: "column", justifyContent: "flex-end"
           }}
           onClick={closeDetails}
         >
           <div 
-            className="slide-up glass-panel" 
+            className="slide-up" 
             style={{
               width: "100%", maxWidth: 680, alignSelf: "center",
               borderTopLeftRadius: 24, borderTopRightRadius: 24,
-              border: "1px solid var(--line-color)", borderBottom: "none",
+              border: "1px solid rgba(255, 255, 255, 0.45)", 
+              borderBottom: "none",
+              background: "rgba(252, 253, 251, 0.85)",
+              backdropFilter: "blur(35px)",
+              WebkitBackdropFilter: "blur(35px)",
               padding: "24px 20px calc(24px + env(safe-area-inset-bottom))",
-              maxHeight: "90vh", overflowY: "auto"
+              maxHeight: "90vh", overflowY: "auto",
+              boxShadow: "0 -10px 40px rgba(30, 34, 25, 0.12)"
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -1280,7 +1348,7 @@ Note à structurer : "${idea.text}"`;
                   {activeIdea.status === "done" && "[ Statut : Terminé ]"}
                 </span>
                 <div style={{ fontSize: 12, color: "var(--faint-color)", marginTop: 2 }}>
-                  Ajouté le {new Date(activeIdea.createdAt).toLocaleDateString("fr-FR")} à {new Date(activeIdea.createdAt).toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit' })}
+                  Ajouté par {activeIdea.author || "Anonyme"} le {new Date(activeIdea.createdAt).toLocaleDateString("fr-FR")} à {new Date(activeIdea.createdAt).toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
               <button 
@@ -1603,6 +1671,8 @@ function IdeaCard({ item, onClick, onToggleDone, onFile, categories, catOf }) {
   const hasSubtasks = item.subtasks && item.subtasks.length > 0;
   const doneSubtasks = hasSubtasks ? item.subtasks.filter(s => s.done).length : 0;
 
+  const isInstaReel = item.text.includes("instagram.com/reel/") || item.text.includes("instagram.com/p/");
+
   return (
     <div 
       className="premium-card idea-in fx" 
@@ -1655,6 +1725,15 @@ function IdeaCard({ item, onClick, onToggleDone, onFile, categories, catOf }) {
               {done ? "[ FAIT ]" : "[ ACTIF ]"}
             </span>
 
+            {/* Author badge */}
+            <span style={{ 
+              color: "var(--faint-color)",
+              background: "var(--surface-alt-color)",
+              padding: "2px 6px", borderRadius: 4
+            }}>
+              [ PAR : {(item.author || "Anonyme").toUpperCase()} ]
+            </span>
+
             {/* Category badge */}
             {itemCat && (
               <span style={{ 
@@ -1677,8 +1756,19 @@ function IdeaCard({ item, onClick, onToggleDone, onFile, categories, catOf }) {
               </span>
             )}
 
+            {/* Instagram Reel badge */}
+            {isInstaReel && (
+              <span style={{ 
+                color: "#D62976", 
+                background: "rgba(214, 41, 118, 0.1)",
+                padding: "2px 6px", borderRadius: 4
+              }}>
+                [ INSTA REEL ]
+              </span>
+            )}
+
             {/* Link tag */}
-            {hasUrl && (
+            {hasUrl && !isInstaReel && (
               <span style={{ 
                 color: "var(--accent-color)", 
                 background: "var(--accent-soft-color)",

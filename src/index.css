@@ -8,8 +8,8 @@
   
   /* Light theme colors (Papier chaulé, vert pin, encre vert-charbon) */
   --bg-color: #F3F4EE;
-  --surface-color: rgba(252, 253, 251, 0.7); /* Translucent */
-  --surface-alt-color: rgba(234, 236, 228, 0.75);
+  --surface-color: rgba(252, 253, 251, 0.84); /* Thicker glass */
+  --surface-alt-color: rgba(234, 236, 228, 0.88);
   --ink-color: #1E2219;
   --muted-color: #4C5245; /* WCAG AA compliant on light background */
   --faint-color: #6C7364; /* WCAG AA compliant on white */
@@ -21,8 +21,8 @@
   --danger-color: #8F2418;
   --shadow-color: rgba(30, 34, 25, 0.03);
   --shadow-hover-color: rgba(30, 34, 25, 0.08);
-  --glass-bg: rgba(252, 253, 251, 0.65);
-  --glass-border: rgba(210, 214, 200, 0.5);
+  --glass-bg: rgba(252, 253, 251, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.45); /* White reflection glow */
   --blob-opacity: 0.15;
 }
 /* Style reset and defaults */
@@ -99,8 +99,8 @@ h1, h2, h3, h4, h5, h6 {
 /* Premium frosted glass card */
 .premium-card {
   background: var(--surface-color);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
   border: 1px solid var(--line-color);
   box-shadow: 0 8px 24px var(--shadow-color);
   border-radius: 16px;
