@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+/* Style reset and defaults */
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  -webkit-text-size-adjust: 100%; /* Prevent font scaling on orientation change on iOS */
+}
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent; /* Remove gray overlay on iOS tap */
+}
+
+/* Tailwind-like structural utility classes */
+.flex {
+  display: flex;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.sticky {
+  position: sticky;
+}
+
+/* Custom interactive element styles */
+.fx {
+  transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Smooth active states for touch targets (excluding input and select fields) */
+.fx:active:not(:disabled):not(input):not(select) {
+  transform: scale(0.97);
+  opacity: 0.95;
+}
