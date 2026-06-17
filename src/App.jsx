@@ -45,6 +45,42 @@ function renderTextWithLinks(text, accentColor) {
   });
 }
 
+// Helper to compress images on the client side
+function compressImage(file, callback) {
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = (event) => {
+    const img = new Image();
+    img.src = event.target.result;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const MAX_WIDTH = 800;
+      const MAX_HEIGHT = 800;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+      callback(dataUrl);
+    };
+  };
+}
+
 // ── Call Gemini API client-side
 async function callGemini(prompt, apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -97,11 +133,7 @@ export default function App() {
     return DEFAULT_CATEGORIES;
   });
 
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem("idees-theme");
-    if (saved) return saved;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
+  const theme = "light";
 
   const [inputPosition, setInputPosition] = useState(() => {
     return localStorage.getItem("idees-input-position") || "bottom"; // Mobile first default
@@ -132,16 +164,13 @@ export default function App() {
   const inputRef = useRef(null);
   const qrCanvasRef = useRef(null);
   const toastTimer = useRef(null);
+  const [attachedImage, setAttachedImage] = useState(null);
 
-  // Sync theme class
+  // Force light theme
   useEffect(() => {
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    localStorage.setItem("idees-theme", theme);
-  }, [theme]);
+    document.documentElement.classList.remove("dark");
+    localStorage.setItem("idees-theme", "light");
+  }, []);
 
   // Sync settings
   useEffect(() => {
@@ -155,7 +184,13 @@ export default function App() {
   const isPushingRef = useRef(false);
   const [needsPush, setNeedsPush] = useState(false);
   const needsPushRef = useRef(false);
+  const lastLocalMutationTimeRef = useRef(0);
   const [syncStatus, setSyncStatus] = useState("synchronisé"); // "synchronisé" | "hors-ligne" | "synchronisation..."
+
+  const triggerLocalMutation = useCallback(() => {
+    lastLocalMutationTimeRef.current = Date.now();
+    setNeedsPush(true);
+  }, []);
 
   // Sync needsPushRef with state
   useEffect(() => {
@@ -191,6 +226,11 @@ export default function App() {
       setSyncStatus("hors-ligne");
     } finally {
       isPushingRef.current = false;
+      if (needsPushRef.current) {
+        setTimeout(() => {
+          pushToServer();
+        }, 50);
+      }
     }
   }, []);
 
@@ -198,13 +238,14 @@ export default function App() {
     if (isFetchingRef.current || isPushingRef.current || needsPushRef.current) return;
     isFetchingRef.current = true;
     setSyncStatus("synchronisation...");
+    const requestTime = Date.now();
     try {
-      const res = await fetch("/api/data");
+      const res = await fetch(`/api/data?_=${requestTime}`);
       if (!res.ok) throw new Error("HTTP error " + res.status);
       const data = await res.json();
       
-      if (needsPushRef.current || isPushingRef.current) {
-        console.log("Skipping server update because local changes are pending");
+      if (lastLocalMutationTimeRef.current > requestTime || needsPushRef.current || isPushingRef.current) {
+        console.log("Skipping server update because local changes are pending or newer mutation occurred");
         return;
       }
       
@@ -379,26 +420,28 @@ Idée à classer : "${ideaText}"`;
   // ── Actions
   async function addIdea() {
     const v = text.trim();
-    if (!v) return;
+    if (!v && !attachedImage) return;
     const newId = uid();
     const newIdeaObj = { 
       id: newId, 
-      text: v, 
+      text: v || "[ Capture d'écran seule ]", 
       createdAt: Date.now(), 
       status: "inbox", 
       category: null,
       aiSuggestion: null,
-      subtasks: [] 
+      subtasks: [],
+      image: attachedImage || null
     };
 
     setIdeas((p) => [newIdeaObj, ...p]);
-    setNeedsPush(true);
+    triggerLocalMutation();
     setText("");
+    setAttachedImage(null);
     announce("Idée ajoutée dans la boîte à trier");
     if (inputRef.current) inputRef.current.focus();
 
     // Trigger AI categorization in background
-    if (geminiKey.trim()) {
+    if (geminiKey.trim() && v) {
       runAiCategorization(newId, v);
     }
   }
@@ -406,7 +449,7 @@ Idée à classer : "${ideaText}"`;
   function fileIdea(id, catId) {
     const cat = categories.find((c) => c.id === catId);
     setIdeas((p) => p.map((i) => (i.id === id ? { ...i, status: "classed", category: catId, aiSuggestion: null } : i)));
-    setNeedsPush(true);
+    triggerLocalMutation();
     announce(cat ? `Rangé dans ${cat.label}` : "Rangé");
     if (activeIdea && activeIdea.id === id) {
       setActiveIdea(prev => ({ ...prev, status: "classed", category: catId, aiSuggestion: null }));
@@ -416,7 +459,7 @@ Idée à classer : "${ideaText}"`;
   function moveIdea(id, target) {
     if (target === "__inbox") {
       setIdeas((p) => p.map((i) => (i.id === id ? { ...i, status: "inbox", category: null } : i)));
-      setNeedsPush(true);
+      triggerLocalMutation();
       announce("Renvoyé dans À trier");
       if (activeIdea && activeIdea.id === id) {
         setActiveIdea(prev => ({ ...prev, status: "inbox", category: null }));
@@ -424,7 +467,7 @@ Idée à classer : "${ideaText}"`;
     } else {
       const cat = categories.find((c) => c.id === target);
       setIdeas((p) => p.map((i) => (i.id === id ? { ...i, status: "classed", category: target } : i)));
-      setNeedsPush(true);
+      triggerLocalMutation();
       announce(cat ? `Déplacé dans ${cat.label}` : "Déplacé");
       if (activeIdea && activeIdea.id === id) {
         setActiveIdea(prev => ({ ...prev, status: "classed", category: target }));
@@ -445,7 +488,7 @@ Idée à classer : "${ideaText}"`;
       }
       return updated;
     }));
-    setNeedsPush(true);
+    triggerLocalMutation();
   }
 
   function removeIdea(id) {
@@ -453,7 +496,7 @@ Idée à classer : "${ideaText}"`;
     const removed = ideas[idx];
     if (!removed) return;
     setIdeas((p) => p.filter((i) => i.id !== id));
-    setNeedsPush(true);
+    triggerLocalMutation();
     setActiveIdea(null);
     announce("Idée supprimée");
     showToast("Idée supprimée", () => {
@@ -462,7 +505,7 @@ Idée à classer : "${ideaText}"`;
         copy.splice(Math.min(idx, copy.length), 0, removed);
         return copy;
       });
-      setNeedsPush(true);
+      triggerLocalMutation();
       setToast(null);
       announce("Suppression annulée");
     });
@@ -472,7 +515,7 @@ Idée à classer : "${ideaText}"`;
     const v = newText.trim();
     if (!v) return;
     setIdeas((p) => p.map((i) => (i.id === id ? { ...i, text: v } : i)));
-    setNeedsPush(true);
+    triggerLocalMutation();
     announce("Texte de l'idée enregistré");
   }
 
@@ -487,7 +530,7 @@ Idée à classer : "${ideaText}"`;
       }
       return updated;
     }));
-    setNeedsPush(true);
+    triggerLocalMutation();
     announce("Sous-tâche modifiée");
   }
 
@@ -503,7 +546,7 @@ Idée à classer : "${ideaText}"`;
       }
       return updated;
     }));
-    setNeedsPush(true);
+    triggerLocalMutation();
     announce("Sous-tâche ajoutée");
   }
 
@@ -517,7 +560,7 @@ Idée à classer : "${ideaText}"`;
       }
       return updated;
     }));
-    setNeedsPush(true);
+    triggerLocalMutation();
     announce("Sous-tâche supprimée");
   }
 
@@ -552,7 +595,7 @@ Note à structurer : "${idea.text}"`;
           }
           return i;
         }));
-        setNeedsPush(true);
+        triggerLocalMutation();
         announce("Note structurée par l'IA avec succès !");
       }
     } catch (err) {
@@ -593,7 +636,7 @@ Note à structurer : "${idea.text}"`;
         if (Array.isArray(parsed.ideas) && Array.isArray(parsed.categories)) {
           setIdeas(parsed.ideas);
           setCategories(parsed.categories);
-          setNeedsPush(true);
+          triggerLocalMutation();
           announce("Sauvegarde importée avec succès !");
           showToast("Données importées avec succès !");
         } else {
@@ -612,14 +655,14 @@ Note à structurer : "${idea.text}"`;
     const color = CAT_COLORS[categories.length % CAT_COLORS.length];
     const cat = { id: uid(), label, color, removable: true };
     setCategories((p) => [...p, cat]);
-    setNeedsPush(true);
+    triggerLocalMutation();
     setNewCat(""); setAddingCat(false); setTab(cat.id); announce(`Catégorie ${label} créée`);
   }
 
   function removeCategory(catId) {
     setIdeas((p) => p.map((i) => (i.category === catId && i.status !== "done" ? { ...i, category: null, status: "inbox" } : i)));
     setCategories((p) => p.filter((c) => c.id !== catId));
-    setNeedsPush(true);
+    triggerLocalMutation();
     setTab((cur) => (cur === catId ? (categories.find((c) => c.id !== catId)?.id || "done") : cur));
     announce("Catégorie supprimée. Idées non terminées renvoyées dans À trier.");
   }
@@ -662,7 +705,7 @@ Note à structurer : "${idea.text}"`;
   const FONT_DISP = "var(--font-disp)";
 
   return (
-    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
       {/* Decorative blobs for iOS Glassmorphism effect */}
       <div className="blob blob-1"></div>
       <div className="blob blob-2"></div>
@@ -670,10 +713,10 @@ Note à structurer : "${idea.text}"`;
       <div role="status" aria-live="polite" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{live}</div>
 
       {/* ── Main Container ── */}
-      <div className="mx-auto flex" style={{ maxWidth: 680, width: "100%", flexDirection: "column", padding: "0 16px 140px", flex: 1 }}>
+      <div className="mx-auto flex" style={{ maxWidth: 680, width: "100%", flexDirection: "column", height: "100%", overflow: "hidden", padding: "0 16px" }}>
         
         {/* Header */}
-        <header className="flex items-center justify-between" style={{ paddingTop: 20, paddingBottom: 12 }}>
+        <header className="flex items-center justify-between" style={{ paddingTop: 20, paddingBottom: 12, flexShrink: 0 }}>
           <div className="flex items-center" style={{ gap: 10 }}>
             <h1 style={{ fontFamily: FONT_DISP, fontWeight: 700, fontSize: 28, letterSpacing: "-0.02em", margin: 0, color: "var(--ink-color)" }}>idées</h1>
             <button 
@@ -719,16 +762,6 @@ Note à structurer : "${idea.text}"`;
           </div>
           <div className="flex" style={{ gap: 8 }}>
             <button 
-              onClick={() => setTheme(t => t === "light" ? "dark" : "light")}
-              className="fx" 
-              style={{
-                background: "var(--surface-color)", border: "1px solid var(--line-color)", 
-                borderRadius: 999, height: 40, padding: "0 14px", fontSize: 13.5, fontWeight: 600, color: "var(--ink-color)"
-              }}
-            >
-              {theme === "light" ? "Mode Sombre" : "Mode Clair"}
-            </button>
-            <button 
               onClick={() => setShowSettings(true)}
               className="fx" 
               style={{
@@ -742,7 +775,7 @@ Note à structurer : "${idea.text}"`;
         </header>
 
         {/* View Segment selector (À trier / Rangé) */}
-        <div className="flex" style={{ gap: 8, paddingBottom: 14 }}>
+        <div className="flex" style={{ gap: 8, paddingBottom: 14, flexShrink: 0 }}>
           <button
             className="fx"
             onClick={() => setView("inbox")}
@@ -775,101 +808,153 @@ Note à structurer : "${idea.text}"`;
           </button>
         </div>
 
-        {/* ── Instanteous Capture Field (TOP POSITION) ── */}
-        {inputPosition === "top" && (
-          <div style={{ paddingTop: 4, paddingBottom: 16 }}>
-            <div 
-              className="premium-card" 
-              style={{
-                padding: "6px", 
-                borderRadius: 24, 
-                border: "1px solid var(--line-color)",
-                display: "flex", 
-                gap: 8,
-                alignItems: "center"
-              }}
-            >
-              <input
-                ref={inputRef}
-                className="fx w-full"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addIdea(); }}
-                placeholder="Noter une idée sans réfléchir..."
-                aria-label="Saisir une nouvelle idée"
+        {/* Scrollable list area */}
+        <div className="no-scrollbar" style={{ flex: 1, overflowY: "auto", paddingBottom: inputPosition === "bottom" ? 100 : 24, WebkitOverflowScrolling: "touch" }}>
+          {/* ── Instanteous Capture Field (TOP POSITION) ── */}
+          {inputPosition === "top" && (
+            <div style={{ paddingTop: 4, paddingBottom: 16 }}>
+              <div 
+                className="premium-card" 
                 style={{
-                  flex: 1, 
-                  background: "transparent", 
-                  border: "none", 
-                  borderRadius: 16,
-                  padding: "12px 16px", 
-                  fontSize: 16, 
-                  color: "var(--ink-color)", 
-                  fontFamily: FONT_UI, 
-                  minHeight: 44,
-                  outline: "none"
-                }}
-              />
-              <button
-                className="fx"
-                onClick={addIdea}
-                disabled={!text.trim()}
-                style={{
-                  background: text.trim() ? "var(--accent-color)" : "transparent",
-                  color: text.trim() ? "#fff" : "var(--faint-color)",
-                  border: "none", 
-                  borderRadius: 20, 
-                  padding: "0 18px", 
-                  fontSize: 14, 
-                  fontWeight: 700,
-                  minHeight: 40, 
-                  fontFamily: FONT_DISP,
+                  padding: "6px", 
+                  borderRadius: 24, 
+                  border: "1px solid var(--line-color)",
+                  display: "flex", 
+                  flexDirection: "column",
+                  gap: 0,
+                  maxWidth: 650,
+                  margin: "0 auto"
                 }}
               >
-                Ajouter
-              </button>
+                {attachedImage && (
+                  <div className="flex items-center" style={{ gap: 10, padding: "8px 12px 6px", borderBottom: "1px solid var(--line-color)" }}>
+                    <img src={attachedImage} style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line-color)" }} />
+                    <span style={{ fontSize: 13, color: "var(--muted-color)", fontWeight: 500 }}>Capture d'écran prête</span>
+                    <button 
+                      onClick={() => setAttachedImage(null)} 
+                      className="fx"
+                      style={{ background: "transparent", border: "none", color: "var(--danger-color)", fontWeight: 700, fontSize: 13, cursor: "pointer", marginLeft: "auto", minHeight: 32, padding: "4px 8px" }}
+                    >
+                      [ ✕ Retirer ]
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center w-full" style={{ gap: 8 }}>
+                  <label
+                    className="fx"
+                    style={{
+                      background: "transparent",
+                      color: "var(--muted-color)",
+                      border: "none",
+                      borderRadius: 20,
+                      padding: "0 10px",
+                      fontSize: 13.5,
+                      fontWeight: 600,
+                      minHeight: 40,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      cursor: "pointer"
+                    }}
+                  >
+                    <span>📷 Image</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          compressImage(file, (base64) => {
+                            setAttachedImage(base64);
+                          });
+                        }
+                      }}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                  <input
+                    ref={inputRef}
+                    className="fx w-full"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") addIdea(); }}
+                    placeholder="Noter une idée sans réfléchir..."
+                    aria-label="Saisir une nouvelle idée"
+                    style={{
+                      flex: 1, 
+                      background: "transparent", 
+                      border: "none", 
+                      borderRadius: 16,
+                      padding: "12px 12px", 
+                      fontSize: 16, 
+                      color: "var(--ink-color)", 
+                      fontFamily: FONT_UI, 
+                      minHeight: 44,
+                      outline: "none"
+                    }}
+                  />
+                  <button
+                    className="fx"
+                    onClick={addIdea}
+                    disabled={!text.trim() && !attachedImage}
+                    style={{
+                      background: (text.trim() || attachedImage) ? "var(--accent-color)" : "transparent",
+                      color: (text.trim() || attachedImage) ? "#fff" : "var(--faint-color)",
+                      border: "none", 
+                      borderRadius: 20, 
+                      padding: "0 18px", 
+                      fontSize: 14, 
+                      fontWeight: 700,
+                      minHeight: 40, 
+                      fontFamily: FONT_DISP,
+                    }}
+                  >
+                    Ajouter
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── Views lists ── */}
-        {view === "inbox" ? (
-          <InboxView
-            inbox={inbox}
-            categories={categories}
-            onFile={fileIdea}
-            onOpen={openDetails}
-            geminiKey={geminiKey}
-            catOf={catOf}
-          />
-        ) : (
-          <RangedView
-            categories={categories}
-            tab={tab}
-            setTab={setTab}
-            catCount={catCount}
-            doneCount={doneItems.length}
-            filter={filter}
-            setFilter={setFilter}
-            items={visibleRanged}
-            catOf={catOf}
-            onToggleDone={toggleDone}
-            onOpen={openDetails}
-            addingCat={addingCat}
-            setAddingCat={setAddingCat}
-            newCat={newCat}
-            setNewCat={setNewCat}
-            onAddCat={addCategory}
-            onRemoveCat={removeCategory}
-          />
-        )}
+          {/* ── Views lists ── */}
+          {view === "inbox" ? (
+            <InboxView
+              inbox={inbox}
+              categories={categories}
+              onFile={fileIdea}
+              onOpen={openDetails}
+              geminiKey={geminiKey}
+              catOf={catOf}
+            />
+          ) : (
+            <RangedView
+              categories={categories}
+              tab={tab}
+              setTab={setTab}
+              catCount={catCount}
+              doneCount={doneItems.length}
+              filter={filter}
+              setFilter={setFilter}
+              items={visibleRanged}
+              catOf={catOf}
+              onToggleDone={toggleDone}
+              onOpen={openDetails}
+              addingCat={addingCat}
+              setAddingCat={setAddingCat}
+              newCat={newCat}
+              setNewCat={setNewCat}
+              onAddCat={addCategory}
+              onRemoveCat={removeCategory}
+            />
+          )}
+        </div>
       </div>
 
       {/* ── Instanteous Capture Field (BOTTOM FLOATING POSITION - default) ── */}
       {inputPosition === "bottom" && (
         <div 
           style={{
-            position: "fixed", 
+            position: "absolute", 
             bottom: "calc(16px + env(safe-area-inset-bottom))", 
             left: 16, 
             right: 16, 
@@ -884,51 +969,98 @@ Note à structurer : "${idea.text}"`;
               borderRadius: 24, 
               border: "1px solid var(--glass-border)",
               display: "flex", 
-              gap: 8,
-              alignItems: "center",
+              flexDirection: "column",
+              gap: 0,
               maxWidth: 650,
               margin: "0 auto"
             }}
           >
-            <input
-              ref={inputRef}
-              className="fx w-full"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") addIdea(); }}
-              placeholder="Noter une idée sans réfléchir..."
-              aria-label="Saisir une nouvelle idée"
-              style={{
-                flex: 1, 
-                background: "transparent", 
-                border: "none", 
-                borderRadius: 16,
-                padding: "12px 16px", 
-                fontSize: 16, 
-                color: "var(--ink-color)", 
-                fontFamily: FONT_UI, 
-                minHeight: 44,
-                outline: "none"
-              }}
-            />
-            <button
-              className="fx"
-              onClick={addIdea}
-              disabled={!text.trim()}
-              style={{
-                background: text.trim() ? "var(--accent-color)" : "transparent",
-                color: text.trim() ? "#fff" : "var(--faint-color)",
-                border: "none", 
-                borderRadius: 20, 
-                padding: "0 18px", 
-                fontSize: 14, 
-                fontWeight: 700,
-                minHeight: 40, 
-                fontFamily: FONT_DISP,
-              }}
-            >
-              Ajouter
-            </button>
+            {attachedImage && (
+              <div className="flex items-center" style={{ gap: 10, padding: "8px 12px 6px", borderBottom: "1px solid var(--line-color)" }}>
+                <img src={attachedImage} style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line-color)" }} />
+                <span style={{ fontSize: 13, color: "var(--muted-color)", fontWeight: 500 }}>Capture d'écran prête</span>
+                <button 
+                  onClick={() => setAttachedImage(null)} 
+                  className="fx"
+                  style={{ background: "transparent", border: "none", color: "var(--danger-color)", fontWeight: 700, fontSize: 13, cursor: "pointer", marginLeft: "auto", minHeight: 32, padding: "4px 8px" }}
+                >
+                  [ ✕ Retirer ]
+                </button>
+              </div>
+            )}
+            <div className="flex items-center w-full" style={{ gap: 8 }}>
+              <label
+                className="fx"
+                style={{
+                  background: "transparent",
+                  color: "var(--muted-color)",
+                  border: "none",
+                  borderRadius: 20,
+                  padding: "0 10px",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  minHeight: 40,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  cursor: "pointer"
+                }}
+              >
+                <span>📷 Image</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      compressImage(file, (base64) => {
+                        setAttachedImage(base64);
+                      });
+                    }
+                  }}
+                  style={{ display: "none" }}
+                />
+              </label>
+              <input
+                ref={inputRef}
+                className="fx w-full"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addIdea(); }}
+                placeholder="Noter une idée sans réfléchir..."
+                aria-label="Saisir une nouvelle idée"
+                style={{
+                  flex: 1, 
+                  background: "transparent", 
+                  border: "none", 
+                  borderRadius: 16,
+                  padding: "12px 12px", 
+                  fontSize: 16, 
+                  color: "var(--ink-color)", 
+                  fontFamily: FONT_UI, 
+                  minHeight: 44,
+                  outline: "none"
+                }}
+              />
+              <button
+                className="fx"
+                onClick={addIdea}
+                disabled={!text.trim() && !attachedImage}
+                style={{
+                  background: (text.trim() || attachedImage) ? "var(--accent-color)" : "transparent",
+                  color: (text.trim() || attachedImage) ? "#fff" : "var(--faint-color)",
+                  border: "none", 
+                  borderRadius: 20, 
+                  padding: "0 18px", 
+                  fontSize: 14, 
+                  fontWeight: 700,
+                  minHeight: 40, 
+                  fontFamily: FONT_DISP,
+                }}
+              >
+                Ajouter
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1179,6 +1311,71 @@ Note à structurer : "${idea.text}"`;
                   fontFamily: FONT_UI, lineHeight: 1.45, resize: "vertical"
                 }}
               />
+            </div>
+
+            {/* Screenshot attachment management inside Bottom Sheet */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8, color: "var(--muted-color)" }}>
+                [ Capture d'écran ]
+              </label>
+              {activeIdea.image ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--line-color)", background: "rgba(0,0,0,0.02)", display: "flex", justifyContent: "center", padding: 8 }}>
+                    <img 
+                      src={activeIdea.image} 
+                      alt="Capture d'écran" 
+                      style={{ maxWidth: "100%", maxHeight: 300, objectFit: "contain", borderRadius: 8 }} 
+                    />
+                  </div>
+                  <button
+                    className="fx"
+                    onClick={() => {
+                      const updated = { ...activeIdea, image: null };
+                      setActiveIdea(updated);
+                      setIdeas(prev => prev.map(i => i.id === activeIdea.id ? updated : i));
+                      triggerLocalMutation();
+                      announce("Capture d'écran retirée");
+                    }}
+                    style={{
+                      minHeight: 44, borderRadius: 12, border: "1.5px solid var(--danger-color)",
+                      background: "transparent", color: "var(--danger-color)",
+                      fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                    }}
+                  >
+                    [ ✕ Retirer la capture d'écran ]
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <label 
+                    className="fx"
+                    style={{
+                      minHeight: 44, borderRadius: 12, border: "1.5px dashed var(--line-color)",
+                      background: "var(--surface-alt-color)", color: "var(--ink-color)",
+                      fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 8
+                    }}
+                  >
+                    <span>📷 Joindre une capture d'écran</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          compressImage(file, (base64) => {
+                            const updated = { ...activeIdea, image: base64 };
+                            setActiveIdea(updated);
+                            setIdeas(prev => prev.map(i => i.id === activeIdea.id ? updated : i));
+                            triggerLocalMutation();
+                            announce("Capture d'écran ajoutée");
+                          });
+                        }
+                      }}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* 🪄 Gemini AI actions inside Bottom Sheet */}
@@ -1511,6 +1708,17 @@ function IdeaCard({ item, onClick, onToggleDone, onFile, categories, catOf }) {
           }}>
             {renderTextWithLinks(item.text, "var(--accent-color)")}
           </div>
+
+          {/* Screenshot attachment preview */}
+          {item.image && (
+            <div style={{ marginTop: 10, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line-color)", background: "var(--surface-alt-color)" }}>
+              <img 
+                src={item.image} 
+                alt="Capture d'écran" 
+                style={{ width: "100%", maxHeight: 180, objectFit: "cover", display: "block" }} 
+              />
+            </div>
+          )}
 
           {/* Subtasks quick render */}
           {hasSubtasks && (

@@ -25,28 +25,6 @@
   --glass-border: rgba(210, 214, 200, 0.5);
   --blob-opacity: 0.15;
 }
-
-:root.dark {
-  /* Dark theme colors (Ardoise profonde, mousse sombre, texte crème) */
-  --bg-color: #0E110C;
-  --surface-color: rgba(30, 35, 27, 0.55); /* Translucent */
-  --surface-alt-color: rgba(39, 46, 36, 0.65);
-  --ink-color: #ECEDE9;
-  --muted-color: #A2A99B; /* WCAG AA compliant on dark background */
-  --faint-color: #828B7A;
-  --line-color: rgba(51, 60, 47, 0.5);
-  --accent-color: #3D8856;
-  --accent-dark-color: #2E6641;
-  --accent-soft-color: rgba(36, 53, 40, 0.7);
-  --accent-ink-color: #A3D2B3;
-  --danger-color: #C34B3C;
-  --shadow-color: rgba(0, 0, 0, 0.15);
-  --shadow-hover-color: rgba(0, 0, 0, 0.28);
-  --glass-bg: rgba(25, 30, 23, 0.55);
-  --glass-border: rgba(51, 60, 47, 0.55);
-  --blob-opacity: 0.12;
-}
-
 /* Style reset and defaults */
 * {
   box-sizing: border-box;
@@ -64,6 +42,10 @@ body {
   color: var(--ink-color);
   transition: background-color 0.3s ease, color 0.3s ease;
   -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
 }
 
 h1, h2, h3, h4, h5, h6 {

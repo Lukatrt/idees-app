@@ -16,6 +16,14 @@ const DEFAULT_CATEGORIES = [
 
 app.use(express.json({ limit: '10mb' }));
 
+// Disable caching for API calls
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  }
+  next();
+});
+
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
