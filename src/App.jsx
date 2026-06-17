@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import QRCode from "qrcode";
 
 // ── Default Categories
@@ -146,10 +146,148 @@ export default function App() {
     localStorage.setItem("idees-input-position", inputPosition);
   }, [inputPosition]);
 
-  // Auto-save data
+  // ── Sync Engine States & Refs
+  const isInitialLoadRef = useRef(true);
+  const isIncomingSyncRef = useRef(false);
+  const isSyncingRef = useRef(false);
+  const [needsPush, setNeedsPush] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("synchronisé"); // "synchronisé" | "hors-ligne" | "synchronisation..."
+
+  const latestDataRef = useRef({ ideas, categories });
+  useEffect(() => {
+    latestDataRef.current = { ideas, categories };
+  }, [ideas, categories]);
+
+  const pushToServer = useCallback(async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    setSyncStatus("synchronisation...");
+    const { ideas: ideasToPush, categories: categoriesToPush } = latestDataRef.current;
+    try {
+      const res = await fetch("/api/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ideas: ideasToPush, categories: categoriesToPush }),
+      });
+      if (!res.ok) throw new Error("HTTP error " + res.status);
+      setNeedsPush(false);
+      setSyncStatus("synchronisé");
+    } catch (err) {
+      console.error("Push to server failed:", err);
+      setSyncStatus("hors-ligne");
+    } finally {
+      isSyncingRef.current = false;
+    }
+  }, []);
+
+  const fetchFromServer = useCallback(async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    setSyncStatus("synchronisation...");
+    try {
+      const res = await fetch("/api/data");
+      if (!res.ok) throw new Error("HTTP error " + res.status);
+      const data = await res.json();
+      
+      let dataChanged = false;
+      if (data && Array.isArray(data.ideas) && Array.isArray(data.categories)) {
+        const { ideas: currentIdeas, categories: currentCategories } = latestDataRef.current;
+        if (data.pristine && (currentIdeas.length > 0 || currentCategories.length !== DEFAULT_CATEGORIES.length)) {
+          isSyncingRef.current = false;
+          await pushToServer();
+          return;
+        }
+
+        isIncomingSyncRef.current = true;
+        setIdeas(prevIdeas => {
+          if (JSON.stringify(prevIdeas) !== JSON.stringify(data.ideas)) {
+            dataChanged = true;
+            return data.ideas;
+          }
+          return prevIdeas;
+        });
+        setCategories(prevCategories => {
+          if (JSON.stringify(prevCategories) !== JSON.stringify(data.categories)) {
+            dataChanged = true;
+            return data.categories;
+          }
+          return prevCategories;
+        });
+      }
+      
+      setSyncStatus("synchronisé");
+      if (dataChanged) {
+        announce("Données synchronisées avec le serveur");
+      }
+    } catch (err) {
+      console.error("Fetch from server failed:", err);
+      setSyncStatus("hors-ligne");
+    } finally {
+      isSyncingRef.current = false;
+      isInitialLoadRef.current = false;
+    }
+  }, [pushToServer]);
+
+  // Auto-save data & trigger server push
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ideas, categories }));
-  }, [ideas, categories]);
+    
+    if (isIncomingSyncRef.current) {
+      isIncomingSyncRef.current = false;
+      return;
+    }
+    
+    if (isInitialLoadRef.current) {
+      return;
+    }
+    
+    setNeedsPush(true);
+    pushToServer();
+  }, [ideas, categories, pushToServer]);
+
+  // ── Sync engine timer & event listeners
+  useEffect(() => {
+    // Polling interval
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        if (needsPush) {
+          pushToServer();
+        } else {
+          fetchFromServer();
+        }
+      }
+    }, 8000);
+
+    // Event listeners
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        if (needsPush) {
+          pushToServer();
+        } else {
+          fetchFromServer();
+        }
+      }
+    };
+
+    const handleOnline = () => {
+      if (needsPush) {
+        pushToServer();
+      } else {
+        fetchFromServer();
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [needsPush, pushToServer, fetchFromServer]);
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
@@ -493,6 +631,10 @@ Note à structurer : "${idea.text}"`;
 
   return (
     <div style={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Decorative blobs for iOS Glassmorphism effect */}
+      <div className="blob blob-1"></div>
+      <div className="blob blob-2"></div>
+
       <div role="status" aria-live="polite" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{live}</div>
 
       {/* ── Main Container ── */}
@@ -502,7 +644,19 @@ Note à structurer : "${idea.text}"`;
         <header className="flex items-center justify-between" style={{ paddingTop: 20, paddingBottom: 12 }}>
           <div className="flex items-center" style={{ gap: 10 }}>
             <h1 style={{ fontFamily: FONT_DISP, fontWeight: 700, fontSize: 28, letterSpacing: "-0.02em", margin: 0 }}>idées</h1>
-            <span style={{ fontSize: 11, opacity: 0.6, letterSpacing: "0.03em", textTransform: "uppercase" }}>PWA v2</span>
+            <span style={{ 
+              fontSize: 10, 
+              fontWeight: 700, 
+              letterSpacing: "0.05em", 
+              textTransform: "uppercase",
+              color: syncStatus === "synchronisé" ? "var(--accent-ink-color)" : syncStatus === "hors-ligne" ? "var(--danger-color)" : "var(--muted-color)",
+              background: syncStatus === "synchronisé" ? "var(--accent-soft-color)" : "var(--surface-alt-color)",
+              padding: "4px 8px",
+              borderRadius: 6,
+              transition: "color 0.3s ease, background 0.3s ease"
+            }}>
+              {syncStatus === "synchronisé" ? "[ Synchronisé ]" : syncStatus === "hors-ligne" ? "[ Hors-ligne ]" : "[ Sync... ]"}
+            </span>
           </div>
           <div className="flex" style={{ gap: 8 }}>
             <button 

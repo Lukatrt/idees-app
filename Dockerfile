@@ -1,4 +1,4 @@
-# ── Étape 1 : Build de l'application
+# ── Étape 1 : Build de l'application React
 FROM node:22-alpine AS builder
 WORKDIR /app
 
@@ -10,16 +10,24 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# ── Étape 2 : Serveur de production Nginx
-FROM nginx:stable-alpine
-WORKDIR /usr/share/nginx/html
+# ── Étape 2 : Serveur de production Node/Express
+FROM node:22-alpine
+WORKDIR /app
 
-# Copie des fichiers compilés
-COPY --from=builder /app/dist .
+# Copie et installation des dépendances de production uniquement
+COPY package*.json ./
+RUN npm ci --only=production
 
-# Configuration Nginx personnalisée pour la PWA
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copie du serveur et des fichiers de build statiques
+COPY server.js ./
+COPY --from=builder /app/dist ./dist
 
-EXPOSE 80
+# Création du dossier data pour le montage de volume
+RUN mkdir -p data
 
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 8289
+
+ENV NODE_ENV=production
+ENV PORT=8289
+
+CMD ["node", "server.js"]

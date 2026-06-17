@@ -5,5 +5,10 @@ services:
     build: .
     container_name: idees_pwa
     ports:
-      - "8289:80"
+      - "8289:8289"
+    volumes:
+      - idees-data:/app/data
     restart: unless-stopped
+
+volumes:
+  idees-data:

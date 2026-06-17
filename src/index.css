@@ -7,42 +7,44 @@
   --font-disp: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
   
   /* Light theme colors (Papier chaulé, vert pin, encre vert-charbon) */
-  --bg-color: #F5F6F2;
-  --surface-color: #FCFDFB;
-  --surface-alt-color: #EAECE4;
+  --bg-color: #F3F4EE;
+  --surface-color: rgba(252, 253, 251, 0.7); /* Translucent */
+  --surface-alt-color: rgba(234, 236, 228, 0.75);
   --ink-color: #1E2219;
   --muted-color: #4C5245; /* WCAG AA compliant on light background */
   --faint-color: #6C7364; /* WCAG AA compliant on white */
-  --line-color: #D2D6C8;
+  --line-color: rgba(210, 214, 200, 0.55);
   --accent-color: #2F6B43;
   --accent-dark-color: #23512F;
-  --accent-soft-color: #E4EBDF;
+  --accent-soft-color: rgba(228, 235, 223, 0.75);
   --accent-ink-color: #1F4A2C;
   --danger-color: #8F2418;
-  --shadow-color: rgba(30, 34, 25, 0.04);
+  --shadow-color: rgba(30, 34, 25, 0.03);
   --shadow-hover-color: rgba(30, 34, 25, 0.08);
-  --glass-bg: rgba(252, 253, 251, 0.85);
-  --glass-border: rgba(210, 214, 200, 0.6);
+  --glass-bg: rgba(252, 253, 251, 0.65);
+  --glass-border: rgba(210, 214, 200, 0.5);
+  --blob-opacity: 0.15;
 }
 
 :root.dark {
   /* Dark theme colors (Ardoise profonde, mousse sombre, texte crème) */
-  --bg-color: #131711;
-  --surface-color: #1E231B;
-  --surface-alt-color: #272E24;
+  --bg-color: #0E110C;
+  --surface-color: rgba(30, 35, 27, 0.55); /* Translucent */
+  --surface-alt-color: rgba(39, 46, 36, 0.65);
   --ink-color: #ECEDE9;
   --muted-color: #A2A99B; /* WCAG AA compliant on dark background */
   --faint-color: #828B7A;
-  --line-color: #333C2F;
+  --line-color: rgba(51, 60, 47, 0.5);
   --accent-color: #3D8856;
   --accent-dark-color: #2E6641;
-  --accent-soft-color: #243528;
+  --accent-soft-color: rgba(36, 53, 40, 0.7);
   --accent-ink-color: #A3D2B3;
   --danger-color: #C34B3C;
-  --shadow-color: rgba(0, 0, 0, 0.2);
-  --shadow-hover-color: rgba(0, 0, 0, 0.35);
-  --glass-bg: rgba(30, 35, 27, 0.85);
-  --glass-border: rgba(51, 60, 47, 0.6);
+  --shadow-color: rgba(0, 0, 0, 0.15);
+  --shadow-hover-color: rgba(0, 0, 0, 0.28);
+  --glass-bg: rgba(25, 30, 23, 0.55);
+  --glass-border: rgba(51, 60, 47, 0.55);
+  --blob-opacity: 0.12;
 }
 
 /* Style reset and defaults */
@@ -64,11 +66,40 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Premium card styles */
+/* Background blobs */
+.blob {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(90px);
+  z-index: -2;
+  opacity: var(--blob-opacity);
+  pointer-events: none;
+  transition: opacity 0.5s ease, background-color 0.5s ease;
+}
+
+.blob-1 {
+  top: -10%;
+  left: -10%;
+  width: 55vw;
+  height: 55vw;
+  background: var(--accent-color);
+}
+
+.blob-2 {
+  bottom: -10%;
+  right: -10%;
+  width: 65vw;
+  height: 65vw;
+  background: #B5673F; /* Warm copper */
+}
+
+/* Premium frosted glass card */
 .premium-card {
   background: var(--surface-color);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--line-color);
-  box-shadow: 0 4px 16px var(--shadow-color);
+  box-shadow: 0 8px 24px var(--shadow-color);
   border-radius: 16px;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
               box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
@@ -77,14 +108,15 @@ body {
 }
 
 .premium-card:hover {
-  box-shadow: 0 6px 20px var(--shadow-hover-color);
+  box-shadow: 0 12px 32px var(--shadow-hover-color);
+  transform: translateY(-1px);
 }
 
-/* Frosted glass panel style */
+/* Frosted glass panels for bottom sheets / sticky overlays */
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--glass-border);
 }
 
