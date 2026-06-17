@@ -19,7 +19,7 @@ COPY package*.json ./
 RUN npm ci --only=production
 
 # Copie du serveur et des fichiers de build statiques
-COPY server.js ./
+COPY server.cjs ./
 COPY --from=builder /app/dist ./dist
 
 # Création du dossier data pour le montage de volume
@@ -30,4 +30,4 @@ EXPOSE 8289
 ENV NODE_ENV=production
 ENV PORT=8289
 
-CMD ["node", "server.js"]
+CMD ["node", "server.cjs"]
