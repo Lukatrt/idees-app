@@ -22,7 +22,7 @@ Ce projet contient l'application progressive PWA **Idées** construite avec Reac
 ## 🚀 Informations de Déploiement
 
 - **Serveur Portainer** : `https://portainer.ekonum.fr`
-- **Jeton d'accès (API Token)** : `ptr_YyQt2GCd1ERBJgvPURF/cayXxl1GStMC9lkFlqMQr58=`
+- **Jeton d'accès (API Token)** : `<VOTRE_CLEF_API_PORTAINER>` (Ne pas versionner !)
 - **ID de l'environnement (Endpoint ID)** : `2`
 - **ID de la Stack Portainer** : `94`
 - **Dépôt Git distant** : `git@github.com:Lukatrt/idees-app.git`
@@ -34,7 +34,7 @@ Lorsque vous poussez des modifications sur la branche `main` de GitHub, vous pou
 
 ```bash
 curl -s -k -X PUT "https://portainer.ekonum.fr/api/stacks/94/git/redeploy?endpointId=2" \
-  -H "X-API-Key: ptr_YyQt2GCd1ERBJgvPURF/cayXxl1GStMC9lkFlqMQr58=" \
+  -H "X-API-Key: <VOTRE_CLEF_API_PORTAINER>" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

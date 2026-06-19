@@ -5,7 +5,7 @@ This file instructs AI agents on how to interact with the project repository, de
 ## Credentials and Deployments
 
 - **Portainer URL**: `https://portainer.ekonum.fr`
-- **Portainer API Access Token**: `ptr_YyQt2GCd1ERBJgvPURF/cayXxl1GStMC9lkFlqMQr58=`
+- **Portainer API Access Token**: `<VOTRE_CLEF_API_PORTAINER>` (Ne pas versionner !)
 - **Portainer Docker Endpoint ID**: `2`
 - **Portainer Stack ID**: `94`
 - **Git Push/Fetch Target**: `git@github.com:Lukatrt/idees-app.git`
@@ -17,7 +17,7 @@ When changes are pushed to GitHub, redeploy the stack by sending a PUT request t
 
 ```bash
 curl -s -k -X PUT "https://portainer.ekonum.fr/api/stacks/94/git/redeploy?endpointId=2" \
-  -H "X-API-Key: ptr_YyQt2GCd1ERBJgvPURF/cayXxl1GStMC9lkFlqMQr58=" \
+  -H "X-API-Key: <VOTRE_CLEF_API_PORTAINER>" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
