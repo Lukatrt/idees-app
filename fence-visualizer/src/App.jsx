@@ -12,6 +12,7 @@ function App() {
   const [gateWidth, setGateWidth] = useState(3.0); // meters
   const [pillarHeight, setPillarHeight] = useState(1.6); // meters
   const [fenceHeight, setFenceHeight] = useState(1.5); // meters
+  const [gatePositionFraction, setGatePositionFraction] = useState(0.5); // 0.0 to 1.0 along the segment
 
   return (
     <div className="flex h-screen w-screen bg-slate-100 overflow-hidden text-slate-800 font-sans">
@@ -49,11 +50,11 @@ function App() {
               <PenTool size={16} className="text-slate-400" /> Outils
             </h3>
             <p className="text-sm text-slate-500 mb-4 leading-relaxed">
-              Commencez par la Vue 2D pour tracer les lignes de votre future clôture en cliquant sur la carte.
+              Tracez d'abord votre clôture sur la carte 2D en cliquant pour ajouter des poteaux.
             </p>
             {points.length > 0 && (
               <button 
-                onClick={() => { setPoints([]); setGateSegmentIndex(null); }}
+                onClick={() => { setPoints([]); setGateSegmentIndex(null); setGatePositionFraction(0.5); }}
                 className="w-full py-2 bg-red-50 text-red-600 rounded text-sm font-medium hover:bg-red-100 transition-colors"
               >
                 Effacer le tracé
@@ -69,12 +70,22 @@ function App() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Portail (Battant Gris)</label>
-                <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm text-slate-700 flex flex-col gap-2">
+                <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm text-slate-700 flex flex-col gap-3">
                   <div className="flex justify-between items-center">
                     <span>Largeur</span>
                     <span className="font-mono bg-white px-2 py-1 border rounded text-xs">{gateWidth} m</span>
                   </div>
                   <input type="range" min="2" max="5" step="0.1" value={gateWidth} onChange={(e) => setGateWidth(parseFloat(e.target.value))} className="w-full" />
+                  
+                  {gateSegmentIndex !== null && (
+                    <>
+                      <div className="flex justify-between items-center mt-2 border-t pt-2 border-slate-200">
+                        <span>Position sur clôture</span>
+                        <span className="font-mono bg-white px-2 py-1 border rounded text-xs">{Math.round(gatePositionFraction * 100)} %</span>
+                      </div>
+                      <input type="range" min="0.1" max="0.9" step="0.05" value={gatePositionFraction} onChange={(e) => setGatePositionFraction(parseFloat(e.target.value))} className="w-full" />
+                    </>
+                  )}
                 </div>
               </div>
               
@@ -112,6 +123,8 @@ function App() {
             setPoints={setPoints} 
             gateSegmentIndex={gateSegmentIndex}
             setGateSegmentIndex={setGateSegmentIndex}
+            gatePositionFraction={gatePositionFraction}
+            gateWidth={gateWidth}
           />
         ) : (
           <Scene3D 
@@ -120,6 +133,7 @@ function App() {
             gateWidth={gateWidth}
             pillarHeight={pillarHeight}
             fenceHeight={fenceHeight}
+            gatePositionFraction={gatePositionFraction}
           />
         )}
       </div>

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 
 // Coordinate conversion: rough flat-earth approximation for small distances
 function latLngToMeters(point, refPoint) {
-  if (!point || !refPoint) return { x: 0, z: 0 };
+  if (!point || !refPoint) return new THREE.Vector3(0, 0, 0);
   const R = 6378137;
   const dLat = (point.lat - refPoint.lat) * Math.PI / 180;
   const dLon = (point.lng - refPoint.lng) * Math.PI / 180;
@@ -85,7 +85,7 @@ function Gate({ center, angle, width, height, pillarHeight }) {
   );
 }
 
-function World({ points, gateSegmentIndex, gateWidth, pillarHeight, fenceHeight }) {
+function World({ points, gateSegmentIndex, gateWidth, pillarHeight, fenceHeight, gatePositionFraction }) {
   const refPoint = points[0];
   
   const segments = useMemo(() => {
@@ -109,12 +109,22 @@ function World({ points, gateSegmentIndex, gateWidth, pillarHeight, fenceHeight 
 
       {segments.map((seg, i) => {
         if (seg.isGate) {
-          const center = new THREE.Vector3().addVectors(seg.p1, seg.p2).multiplyScalar(0.5);
+          const center = new THREE.Vector3().lerpVectors(seg.p1, seg.p2, gatePositionFraction);
           const angle = Math.atan2(seg.p2.x - seg.p1.x, seg.p2.z - seg.p1.z);
           const dist = seg.p1.distanceTo(seg.p2);
           
-          // If the segment is longer than the gate, we need fence on the sides
-          const gateTotalWidth = gateWidth + 0.8; // width + 2 pillars (0.4 each)
+          const dir = new THREE.Vector3().subVectors(seg.p2, seg.p1).normalize();
+          const gateSpan = gateWidth + 0.8; // width + 2 pillars (0.4 each)
+          const halfGateSpan = gateSpan / 2;
+          
+          const leftPillarPos = new THREE.Vector3().addScaledVector(dir, -halfGateSpan).add(center);
+          const rightPillarPos = new THREE.Vector3().addScaledVector(dir, halfGateSpan).add(center);
+          
+          const distToP1 = center.distanceTo(seg.p1);
+          const distToP2 = center.distanceTo(seg.p2);
+          
+          const renderLeftFence = distToP1 > halfGateSpan;
+          const renderRightFence = distToP2 > halfGateSpan;
           
           return (
             <group key={i}>
@@ -125,10 +135,11 @@ function World({ points, gateSegmentIndex, gateWidth, pillarHeight, fenceHeight 
                 height={fenceHeight} 
                 pillarHeight={pillarHeight} 
               />
-              {/* Optional: Add fence to fill the gap if segment is long enough */}
-              {dist > gateTotalWidth && (
-                 // Just a simple visual indicator for now, math for exact gap filling is slightly complex for this snippet
-                 null
+              {renderLeftFence && (
+                <FencePanel start={seg.p1} end={leftPillarPos} height={fenceHeight} />
+              )}
+              {renderRightFence && (
+                <FencePanel start={rightPillarPos} end={seg.p2} height={fenceHeight} />
               )}
             </group>
           );
@@ -140,7 +151,7 @@ function World({ points, gateSegmentIndex, gateWidth, pillarHeight, fenceHeight 
   );
 }
 
-export default function Scene3D({ points, gateSegmentIndex, gateWidth, pillarHeight, fenceHeight }) {
+export default function Scene3D({ points, gateSegmentIndex, gateWidth, pillarHeight, fenceHeight, gatePositionFraction }) {
   if (!points || points.length < 2) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-slate-300">
@@ -152,10 +163,10 @@ export default function Scene3D({ points, gateSegmentIndex, gateWidth, pillarHei
 
   return (
     <div className="w-full h-full bg-sky-100">
-      <Canvas shadows camera={{ position: [5, 5, 10], fov: 50 }}>
+      <Canvas shadows camera={{ position: [5, 5, 10], fov: 50 }} style={{ width: '100%', height: '100%' }}>
         <Sky sunPosition={[100, 20, 100]} />
         <ambientLight intensity={0.5} />
-        <directionalLight castShadow position={[10, 10, 5]} intensity={1.5} shadow-mapSize={[1024, 1024]} />
+        <directionalLight castShadow position={[10, 10, 5]} intensity={1.5} shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
         
         <World 
           points={points} 
@@ -163,6 +174,7 @@ export default function Scene3D({ points, gateSegmentIndex, gateWidth, pillarHei
           gateWidth={gateWidth}
           pillarHeight={pillarHeight}
           fenceHeight={fenceHeight}
+          gatePositionFraction={gatePositionFraction}
         />
         
         <ContactShadows resolution={1024} scale={50} blur={2} opacity={0.5} far={10} color="#000000" />
