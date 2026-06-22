@@ -10,5 +10,14 @@ services:
       - idees-data:/app/data
     restart: unless-stopped
 
+  fence-visualizer:
+    build:
+      context: .
+      dockerfile: Dockerfile.fence
+    container_name: fence_visualizer
+    ports:
+      - "9876:80"
+    restart: unless-stopped
+
 volumes:
   idees-data:

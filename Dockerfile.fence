@@ -1,0 +1,17 @@
+# ── Étape 1 : Build de l'application React
+FROM node:22-alpine AS builder
+WORKDIR /app
+
+# Installation des dépendances
+COPY fence-visualizer/package*.json ./
+RUN npm ci
+
+# Copie du code source et compilation
+COPY fence-visualizer/ .
+RUN npm run build
+
+# ── Étape 2 : Nginx pour servir les fichiers statiques
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
